@@ -57,3 +57,4 @@ Planned system scope includes PPG, IMU fall detection, BLE telemetry, and multi-
 ## Notes
 - Fever threshold is configured in `src/main.c` via `FEVER_THRESHOLD_C`.
 - If sensor reads fail, OLED shows `Read Fail`; verify wiring/address.
+- Have to use some sort of support under Temp Sensor for it to be connected properly
