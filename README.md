@@ -10,6 +10,7 @@ Current implemented firmware in this repo revision focuses on:
 - C/F unit toggle via BOOT button
 - Moving-average smoothing
 - Fever alert thresholding
+- LED status indication on GPIO2
 
 Planned system scope includes PPG, IMU fall detection, BLE telemetry, and multi-task FreeRTOS architecture.
 
@@ -20,11 +21,16 @@ Planned system scope includes PPG, IMU fall detection, BLE telemetry, and multi-
 - 5-sample moving-average smoothing for stable readings.
 - Celsius/Fahrenheit display toggle using ESP32 BOOT button (`GPIO0`).
 - Fever alert when smoothed object temperature is `>= 38.0 C`.
+- Status LED on `GPIO2`:
+  - `OFF` = normal
+  - `ON` = fever
+  - `BLINK` = sensor read failure
 
 ## Hardware (Current)
 - ESP32 (`freenove_esp32_wrover`)
 - MLX90614 temperature sensor
 - SSD1306 I2C OLED (`0x3C`)
+- 1x LED + 220 ohm resistor (status indicator)
 
 ## Wiring (Current)
 - ESP32 `GPIO21` -> I2C `SDA` (MLX90614 + OLED SDA)
@@ -32,6 +38,7 @@ Planned system scope includes PPG, IMU fall detection, BLE telemetry, and multi-
 - ESP32 `3V3` -> sensor and OLED VCC
 - ESP32 `GND` -> sensor and OLED GND
 - ESP32 `GPIO0` (BOOT button) -> toggles `C/F`
+- ESP32 `GPIO2` -> `220 ohm resistor` -> LED anode, LED cathode -> `GND`
 
 ## Build, Flash, Monitor (PlatformIO)
 ```bash

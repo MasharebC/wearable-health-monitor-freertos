@@ -35,6 +35,7 @@
 #define SMA_WINDOW 5
 #define FEVER_THRESHOLD_C 38.0f
 #define UNIT_TOGGLE_GPIO GPIO_NUM_0
+#define STATUS_LED_GPIO GPIO_NUM_2
 
 typedef enum {
     UNIT_C = 0,
@@ -77,6 +78,19 @@ static void unit_button_init(void)
         .intr_type = GPIO_INTR_DISABLE,
     };
     ESP_ERROR_CHECK(gpio_config(&conf));
+}
+
+static void status_led_init(void)
+{
+    gpio_config_t conf = {
+        .pin_bit_mask = (1ULL << STATUS_LED_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&conf));
+    gpio_set_level(STATUS_LED_GPIO, 0);
 }
 
 static esp_err_t mlx_read_word(uint8_t reg, uint16_t *out)
@@ -140,6 +154,7 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(i2c_legacy_init());
     unit_button_init();
+    status_led_init();
     vTaskDelay(pdMS_TO_TICKS(50));
 
     SSD1306_t oled;
@@ -151,6 +166,7 @@ void app_main(void)
     moving_avg_t obj_avg = {0};
     temp_unit_t unit = UNIT_C;
     int last_button_level = 1;
+    bool led_blink_state = false;
 
     char line[24];
     TickType_t last_wake = xTaskGetTickCount();
@@ -193,8 +209,10 @@ void app_main(void)
 
             if (obj_smooth_c >= FEVER_THRESHOLD_C) {
                 oled_line(&oled, 6, "ALERT: FEVER");
+                gpio_set_level(STATUS_LED_GPIO, 1); // fever: LED on
             } else {
                 oled_line(&oled, 6, "Status: Normal");
+                gpio_set_level(STATUS_LED_GPIO, 0); // normal: LED off
             }
             oled_line(&oled, 7, "BTN0: C/F Toggle");
         } else {
@@ -205,6 +223,9 @@ void app_main(void)
             oled_line(&oled, 4, "Obj: --.--");
             oled_line(&oled, 6, "Read Fail");
             oled_line(&oled, 7, "Check wiring");
+
+            led_blink_state = !led_blink_state;
+            gpio_set_level(STATUS_LED_GPIO, led_blink_state ? 1 : 0); // read fail: blink
         }
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(OLED_UPDATE_MS));

@@ -8,4 +8,8 @@
 - Added temperature smoothing (5-sample moving average).
 - Added unit toggle (C/F) using BOOT button (`GPIO0`).
 - Added fever alert (`ALERT: FEVER`) based on smoothed object temp threshold.
+- Added LED status indicator on `GPIO2`:
+  - OFF = normal
+  - ON = fever
+  - BLINK = sensor read failure
 - Added and validated unit tests for conversion math (`test/test_temp_math`).
