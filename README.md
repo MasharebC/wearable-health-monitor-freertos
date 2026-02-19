@@ -37,6 +37,10 @@ See `docs/architecture.md` for task responsibilities, priorities, and packet flo
 ## Runtime Behavior
 - Fixed-rate sensor sampling using `vTaskDelayUntil`.
 - Timestamped output packets with versioned schema + status flags.
+- Integrated I2C sensors:
+- MLX90614 temperature (ambient/object)
+- MAX30102 raw PPG channels (RED/IR) for oxygen-sensing pipeline input
+- MPU6050 gyroscope (X/Y/Z dps)
 - Runtime diagnostics:
 - Task stack high-water marks
 - Queue depth/high-water counters
@@ -63,6 +67,8 @@ Expected debug artifacts:
 Current hardware integration in this repo includes:
 - ESP32 (`freenove_esp32_wrover`)
 - MLX90614
+- MAX30102
+- MPU6050
 - SSD1306 I2C OLED
 - Status LED
 
