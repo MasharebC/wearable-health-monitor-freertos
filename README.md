@@ -1,5 +1,7 @@
 # ESP32 Health Monitor Firmware (FreeRTOS Portfolio Project)
-<img width="1536" height="2048" alt="image" src="https://github.com/user-attachments/assets/bc5fae6d-834f-450d-90a2-6cefbc3415ce" />
+<img src="https://github.com/user-attachments/assets/bc5fae6d-834f-450d-90a2-6cefbc3415ce" 
+     width="400"
+     style="transform: rotate(90deg);" />
 
 ## Project Summary
 This project is an interview-focused embedded firmware portfolio build for ESP32.
