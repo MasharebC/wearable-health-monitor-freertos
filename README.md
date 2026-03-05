@@ -3,7 +3,7 @@
 
 
 ## Project Summary
-This project is an interview-focused embedded firmware portfolio build for ESP32.
+This project is an embedded firmware portfolio build for ESP32.
 The goal is to demonstrate production-style RTOS architecture, reliability, and
 debugging discipline using an existing health-sensor codebase, not feature count.
 
