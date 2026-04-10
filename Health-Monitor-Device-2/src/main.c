@@ -22,6 +22,7 @@
 #include "os/os_mbuf.h"
 
 #include "mlx90614.h"
+#include "max30102.h"
 #include "ssd1306.h"
 
 #define DEVICE_NAME      "HealthMonitor"
@@ -38,6 +39,8 @@ static uint16_t ble_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t vitals_char_handle;
 static uint8_t own_addr_type;
 
+static bool temp_sensor_ok = false;
+static bool hr_sensor_ok = false;
 static bool display_ok = false;
 
 static char latest_payload[128] = "{\"status\":\"booting\"}";
@@ -256,39 +259,83 @@ static void sensor_stream_task(void *param)
     char line[32];
 
     /* Track last values to avoid redundant display redraws. */
-    float last_temp_c = -999.0f;
-    bool last_connected = false;
+    float last_temp_c   = -999.0f;
+    bool  last_connected = false;
 
     while (true) {
         float temp_c = 0.0f;
-        esp_err_t ret = mlx90614_read_object_temp(I2C_PORT, &temp_c);
-
-        if (ret == ESP_OK) {
-            snprintf(latest_payload, sizeof(latest_payload),
-                     "{\"temperature_c\":%.2f}", temp_c);
-
-            bool connected = (ble_conn_handle != BLE_HS_CONN_HANDLE_NONE);
-            bool temp_changed = (temp_c != last_temp_c);
-            bool conn_changed = (connected != last_connected);
-
-            if (display_ok && (temp_changed || conn_changed)) {
-                ssd1306_clear();
-                ssd1306_draw_string(0, 0, "Health Monitor");
-                snprintf(line, sizeof(line), "Temp: %.2f C", temp_c);
-                ssd1306_draw_string(0, 16, line);
-                ssd1306_draw_string(0, 40, connected ? "BLE: Connected"
-                                                     : "BLE: Advertising");
-                ssd1306_update(I2C_PORT);
+        bool temp_valid = false;
+        if (temp_sensor_ok) {
+            esp_err_t ret = mlx90614_read_object_temp(I2C_PORT, &temp_c);
+            if (ret == ESP_OK) {
+                temp_valid = true;
+            } else {
+                ESP_LOGW(TAG, "Temp read failed: %s; recovering I2C",
+                         esp_err_to_name(ret));
+                i2c_bus_recover(I2C_PORT);
+                temp_sensor_ok = (mlx90614_init(I2C_PORT) == ESP_OK);
             }
-
-            last_temp_c = temp_c;
-            last_connected = connected;
-
-            ESP_LOGI(TAG, "Temp=%.2f C  payload=%s", temp_c, latest_payload);
-            notify_phone();
-        } else {
-            ESP_LOGW(TAG, "Temp read failed: %s", esp_err_to_name(ret));
         }
+
+        max30102_result_t vitals = {0};
+        if (hr_sensor_ok) {
+            esp_err_t ret = max30102_read_vitals(I2C_PORT, &vitals);
+            if (ret != ESP_OK) {
+                ESP_LOGW(TAG, "MAX30102 read failed: %s; recovering I2C",
+                         esp_err_to_name(ret));
+                i2c_bus_recover(I2C_PORT);
+                hr_sensor_ok = (max30102_init(I2C_PORT) == ESP_OK);
+            }
+        }
+
+        if (temp_valid) {
+            snprintf(latest_payload, sizeof(latest_payload),
+                     "{\"temp_c\":%.2f"
+                     ",\"hr_bpm\":%.1f,\"hr_valid\":%s"
+                     ",\"spo2_pct\":%.1f,\"spo2_valid\":%s}",
+                     temp_c,
+                     vitals.heart_rate_bpm,
+                     vitals.hr_valid   ? "true" : "false",
+                     vitals.spo2_pct,
+                     vitals.spo2_valid ? "true" : "false");
+        } else {
+            snprintf(latest_payload, sizeof(latest_payload),
+                     "{\"temp_c\":null"
+                     ",\"hr_bpm\":%.1f,\"hr_valid\":%s"
+                     ",\"spo2_pct\":%.1f,\"spo2_valid\":%s}",
+                     vitals.heart_rate_bpm,
+                     vitals.hr_valid   ? "true" : "false",
+                     vitals.spo2_pct,
+                     vitals.spo2_valid ? "true" : "false");
+        }
+
+        bool connected   = (ble_conn_handle != BLE_HS_CONN_HANDLE_NONE);
+        bool temp_changed = (temp_c != last_temp_c);
+        bool conn_changed = (connected != last_connected);
+
+        if (display_ok && (temp_changed || conn_changed)) {
+            ssd1306_clear();
+            ssd1306_draw_string(0, 0, "Health Monitor");
+            snprintf(line, sizeof(line), "Temp: %.2f C", temp_c);
+            ssd1306_draw_string(0, 16, line);
+            if (vitals.hr_valid) {
+                snprintf(line, sizeof(line), "HR: %.0f bpm", vitals.heart_rate_bpm);
+                ssd1306_draw_string(0, 28, line);
+            }
+            if (vitals.spo2_valid) {
+                snprintf(line, sizeof(line), "SpO2: %.1f%%", vitals.spo2_pct);
+                ssd1306_draw_string(0, 40, line);
+            }
+            ssd1306_draw_string(0, 52, connected ? "BLE: Connected"
+                                                  : "BLE: Advertising");
+            ssd1306_update(I2C_PORT);
+        }
+
+        last_temp_c   = temp_c;
+        last_connected = connected;
+
+        ESP_LOGI(TAG, "payload=%s", latest_payload);
+        notify_phone();
 
         vTaskDelay(pdMS_TO_TICKS(STREAM_PERIOD_MS));
     }
@@ -319,9 +366,16 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "Scan done, %d device(s) found", found);
 
-    bool temp_sensor_ok = (mlx90614_init(I2C_PORT) == ESP_OK);
+    temp_sensor_ok = (mlx90614_init(I2C_PORT) == ESP_OK);
     if (!temp_sensor_ok) {
         ESP_LOGW(TAG, "MLX90614 not found — continuing without temp sensor");
+        i2c_bus_recover(I2C_PORT);
+    }
+
+    hr_sensor_ok = (max30102_init(I2C_PORT) == ESP_OK);
+    if (!hr_sensor_ok) {
+        ESP_LOGW(TAG, "MAX30102 not found — continuing without HR/SpO2");
+        i2c_bus_recover(I2C_PORT);
     }
 
     display_ok = (ssd1306_init(I2C_PORT) == ESP_OK);
@@ -330,8 +384,9 @@ void app_main(void)
         i2c_bus_recover(I2C_PORT);
     }
 
-    ESP_LOGI(TAG, "Temp sensor: %s, Display: %s",
+    ESP_LOGI(TAG, "Temp sensor: %s, HR sensor: %s, Display: %s",
              temp_sensor_ok ? "OK" : "FAIL",
+             hr_sensor_ok ? "OK" : "FAIL",
              display_ok ? "OK" : "FAIL");
 
     nimble_port_init();
