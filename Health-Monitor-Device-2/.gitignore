@@ -1,0 +1,14 @@
+# PlatformIO build output
+.pio/
+
+# VSCode generated files
+.vscode/.browse.c_cpp.db*
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/ipch
+
+# ESP-IDF auto-generated (board-specific sdkconfig.* variants are tracked)
+sdkconfig
+
+# macOS
+.DS_Store
